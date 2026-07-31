@@ -1,0 +1,81 @@
+name: Download TikTok Videos
+
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: "Paste one or more TikTok links separated by spaces"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install downloader
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade curl_cffi
+          python -m pip install --upgrade "yt-dlp @ https://github.com/yt-dlp/yt-dlp/archive/master.zip"
+
+      - name: Validate TikTok links
+        env:
+          TIKTOK_URLS: ${{ inputs.urls }}
+        run: |
+          python - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          urls = os.environ["TIKTOK_URLS"].split()
+          allowed_hosts = {
+              "tiktok.com",
+              "www.tiktok.com",
+              "vm.tiktok.com",
+              "vt.tiktok.com",
+          }
+
+          if not urls:
+              raise SystemExit("No links were provided.")
+
+          for url in urls:
+              parsed = urlparse(url)
+              if parsed.scheme != "https" or parsed.hostname not in allowed_hosts:
+                  raise SystemExit(f"Invalid TikTok link: {url}")
+
+          with open("urls.txt", "w", encoding="utf-8") as file:
+              file.write("\n".join(urls) + "\n")
+
+          print(f"Validated {len(urls)} TikTok link(s).")
+          PY
+
+      - name: Download videos
+        run: |
+          mkdir -p videos
+          yt-dlp \
+            --batch-file urls.txt \
+            --impersonate chrome \
+            --no-playlist \
+            --continue \
+            --merge-output-format mp4 \
+            --remux-video mp4 \
+            -o "videos/%(autonumber)02d - %(uploader)s - %(id)s.%(ext)s"
+
+      - name: Upload downloaded videos
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tiktok-videos-${{ github.run_number }}
+          path: videos/
+          if-no-files-found: warn
+          compression-level: 0
+          retention-days: 1
