@@ -13,20 +13,19 @@ permissions:
 
 jobs:
   download:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     steps:
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
-          python-version: "3.12"
+          python-version: "3.12.13"
 
-      - name: Install downloader
+      - name: Install fixed downloader versions
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install --upgrade curl_cffi
-          python -m pip install --upgrade "yt-dlp @ https://github.com/yt-dlp/yt-dlp/archive/master.zip"
+          python -m pip install "curl_cffi==0.15.0" "yt-dlp==2026.7.4"
+          yt-dlp --list-impersonate-targets
 
       - name: Validate TikTok links
         env:
@@ -72,7 +71,7 @@ jobs:
 
       - name: Upload downloaded videos
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: tiktok-videos-${{ github.run_number }}
           path: videos/
