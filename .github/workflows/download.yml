@@ -65,6 +65,7 @@ jobs:
             --impersonate chrome \
             --no-playlist \
             --continue \
+            --format-sort "vcodec:h264" \
             --merge-output-format mp4 \
             --remux-video mp4 \
             -o "videos/%(autonumber)02d - %(uploader)s - %(id)s.%(ext)s"
