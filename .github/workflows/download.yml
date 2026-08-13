@@ -45,6 +45,7 @@ jobs:
               "vm.tiktok.com",
               "vt.tiktok.com",
           }
+
           youtube_hosts = {
               "youtube.com",
               "www.youtube.com",
@@ -52,7 +53,12 @@ jobs:
               "music.youtube.com",
               "youtu.be",
           }
-          instagram_hosts = {"instagram.com", "www.instagram.com"}
+
+          instagram_hosts = {
+              "instagram.com",
+              "www.instagram.com",
+          }
+
           facebook_hosts = {
               "facebook.com",
               "www.facebook.com",
@@ -76,12 +82,15 @@ jobs:
               if host in youtube_hosts:
                   if host == "youtu.be":
                       return len(path) > 1
+
                   return path == "/watch" or bool(
                       re.match(r"^/(shorts|live|embed|clip)/", path)
                   )
 
               if host in instagram_hosts:
-                  return bool(re.match(r"^/(reel|reels)/", path))
+                  return bool(
+                      re.match(r"^/(reel|reels)/", path)
+                  )
 
               if host in facebook_hosts:
                   return host == "fb.watch" or bool(
@@ -94,25 +103,41 @@ jobs:
               raise SystemExit("No links were provided.")
 
           if len(urls) > 10:
-              raise SystemExit("A maximum of 10 links is allowed per run.")
+              raise SystemExit(
+                  "A maximum of 10 links is allowed per run."
+              )
 
           for url in urls:
               if not is_supported(url):
-                  raise SystemExit(f"Unsupported link: {url}")
+                  raise SystemExit(
+                      f"Unsupported link: {url}"
+                  )
 
           unique_urls = list(dict.fromkeys(urls))
-          with open("urls.txt", "w", encoding="utf-8") as file:
-              file.write("\n".join(unique_urls) + "\n")
 
-          print(f"Validated {len(unique_urls)} supported link(s).")
+          with open(
+              "urls.txt",
+              "w",
+              encoding="utf-8"
+          ) as file:
+              file.write(
+                  "\n".join(unique_urls) + "\n"
+              )
+
+          print(
+              f"Validated {len(unique_urls)} supported link(s)."
+          )
           PY
 
       - name: Download videos
         run: |
           mkdir -p videos
+
           yt-dlp \
             --batch-file urls.txt \
             --impersonate chrome \
+            --js-runtimes node \
+            --remote-components ejs:npm \
             --no-playlist \
             --continue \
             --retries 10 \
