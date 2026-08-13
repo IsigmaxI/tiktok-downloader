@@ -1,10 +1,10 @@
-name: Download TikTok Videos
+name: Download Social Media Videos
 
 on:
   workflow_dispatch:
     inputs:
       urls:
-        description: "Paste one or more TikTok links separated by spaces"
+        description: "Paste TikTok, YouTube, Instagram Reel, or Facebook Reel links separated by spaces"
         required: true
         type: string
 
@@ -14,7 +14,7 @@ permissions:
 jobs:
   download:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Set up Python
@@ -27,34 +27,84 @@ jobs:
           python -m pip install "curl_cffi==0.15.0" "yt-dlp==2026.7.4"
           yt-dlp --list-impersonate-targets
 
-      - name: Validate TikTok links
+      - name: Validate supported links
         env:
-          TIKTOK_URLS: ${{ inputs.urls }}
+          MEDIA_URLS: ${{ inputs.urls }}
         run: |
           python - <<'PY'
           import os
+          import re
           from urllib.parse import urlparse
 
-          urls = os.environ["TIKTOK_URLS"].split()
-          allowed_hosts = {
+          urls = os.environ["MEDIA_URLS"].split()
+
+          tiktok_hosts = {
               "tiktok.com",
               "www.tiktok.com",
+              "m.tiktok.com",
               "vm.tiktok.com",
               "vt.tiktok.com",
           }
+          youtube_hosts = {
+              "youtube.com",
+              "www.youtube.com",
+              "m.youtube.com",
+              "music.youtube.com",
+              "youtu.be",
+          }
+          instagram_hosts = {"instagram.com", "www.instagram.com"}
+          facebook_hosts = {
+              "facebook.com",
+              "www.facebook.com",
+              "m.facebook.com",
+              "mbasic.facebook.com",
+              "web.facebook.com",
+              "fb.watch",
+          }
+
+          def is_supported(url):
+              parsed = urlparse(url)
+              host = (parsed.hostname or "").lower().rstrip(".")
+              path = parsed.path
+
+              if parsed.scheme != "https":
+                  return False
+
+              if host in tiktok_hosts:
+                  return True
+
+              if host in youtube_hosts:
+                  if host == "youtu.be":
+                      return len(path) > 1
+                  return path == "/watch" or bool(
+                      re.match(r"^/(shorts|live|embed|clip)/", path)
+                  )
+
+              if host in instagram_hosts:
+                  return bool(re.match(r"^/(reel|reels)/", path))
+
+              if host in facebook_hosts:
+                  return host == "fb.watch" or bool(
+                      re.match(r"^/(reel|reels|share/r)/", path)
+                  )
+
+              return False
 
           if not urls:
               raise SystemExit("No links were provided.")
 
+          if len(urls) > 10:
+              raise SystemExit("A maximum of 10 links is allowed per run.")
+
           for url in urls:
-              parsed = urlparse(url)
-              if parsed.scheme != "https" or parsed.hostname not in allowed_hosts:
-                  raise SystemExit(f"Invalid TikTok link: {url}")
+              if not is_supported(url):
+                  raise SystemExit(f"Unsupported link: {url}")
 
+          unique_urls = list(dict.fromkeys(urls))
           with open("urls.txt", "w", encoding="utf-8") as file:
-              file.write("\n".join(urls) + "\n")
+              file.write("\n".join(unique_urls) + "\n")
 
-          print(f"Validated {len(urls)} TikTok link(s).")
+          print(f"Validated {len(unique_urls)} supported link(s).")
           PY
 
       - name: Download videos
@@ -65,16 +115,18 @@ jobs:
             --impersonate chrome \
             --no-playlist \
             --continue \
+            --retries 10 \
+            --fragment-retries 10 \
             --format-sort "vcodec:h264" \
             --merge-output-format mp4 \
             --remux-video mp4 \
-            -o "videos/%(autonumber)02d - %(uploader)s - %(id)s.%(ext)s"
+            -o "videos/%(autonumber)02d - %(extractor_key)s - %(uploader)s - %(id)s.%(ext)s"
 
       - name: Upload downloaded videos
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: tiktok-videos-${{ github.run_number }}
+          name: social-media-videos-${{ github.run_number }}
           path: videos/
           if-no-files-found: warn
           compression-level: 0
